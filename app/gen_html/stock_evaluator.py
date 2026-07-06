@@ -26,6 +26,7 @@ from app.conf.path import JS_DIR
 from app.conf.path import REPORT_DIR
 from app.core.logger import log
 from app.gen_html import eval_guide
+from app.gen_html.utils import normalize_code
 
 # ============================================================
 # 配置：westock-data CLI 路径（可通过环境变量覆盖）
@@ -1383,26 +1384,6 @@ body {{
 
 
 # ============================================================
-# 主程序
-# ============================================================
-def normalize_stock_code(code):
-    """自动识别股票代码前缀，支持纯数字输入。
-    规则: 6开头->sh, 0/3开头->sz, 8/4开头->bj, 已有前缀则保留。
-    """
-    code = code.strip().lower()
-    for prefix in ("sh", "sz", "bj", "hk", "us"):
-        if code.startswith(prefix):
-            return code
-    if code.startswith("6"):
-        return "sh" + code
-    elif code.startswith(("0", "3")):
-        return "sz" + code
-    elif code.startswith(("8", "4")):
-        return "bj" + code
-    return "us" + code
-
-
-# ============================================================
 # 数据获取
 # ============================================================
 
@@ -1450,7 +1431,7 @@ def get_kline(code, period="day", limit=120):
 
 
 def analyze(raw_code):
-    code = normalize_stock_code(raw_code)
+    code = normalize_code(raw_code)
     if code != raw_code.lower():
         log.info(f"代码识别: {raw_code} → {code}")
     log.info(f"正在获取 {code} 的行情数据...")
