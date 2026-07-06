@@ -27,7 +27,7 @@ def register_routers(app: FastAPI):
     from app.routers.view.stock import router as stock_viewer
     app.include_router(stock_viewer)
 
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.mount("/stock-static", StaticFiles(directory=STATIC_DIR), name="stock-static")
 
 
 def create_app() -> FastAPI:

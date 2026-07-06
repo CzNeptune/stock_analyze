@@ -19,4 +19,4 @@ JS_DIR = STATIC_DIR / "js"
 REPORT_DIR = STATIC_DIR / "reports"
 
 # 报告目录uri
-REPORT_DIR_URI = "/static/reports"
+REPORT_DIR_URI = "/stock-static/reports"
