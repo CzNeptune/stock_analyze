@@ -924,7 +924,7 @@ def analyze(raw_code: str):
 
     # 若今日已经生成报告,则直接返回
     today = time.strftime("%Y-%m-%d", time.localtime())
-    output_filename = f"quant_{code}_{today}.html"
+    output_filename = f"{code}_quant_{today}.html"
     html_path = os.path.join(REPORT_DIR, output_filename)
     if os.path.exists(html_path):
         log.info(f"今日已生成报告: {html_path}, 直接返回结果")
