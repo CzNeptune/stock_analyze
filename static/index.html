@@ -20,6 +20,7 @@
             gap: 10px;
             max-width: 900px;
             margin: 0 auto 20px;
+            position: relative;
         }
         .radio-group {
             display: flex;
@@ -52,6 +53,46 @@
         }
         #searchBtn:hover {
             background: #097dd6;
+        }
+
+        /* 自动补全下拉列表 */
+        .autocomplete-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #dcdcdc;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .autocomplete-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+        .autocomplete-item:hover,
+        .autocomplete-item.highlighted {
+            background-color: #f0f7ff;
+        }
+        .autocomplete-item .code {
+            color: #999;
+            font-size: 14px;
+        }
+        .autocomplete-item .name {
+            font-weight: bold;
+        }
+        .autocomplete-item .type {
+            color: #666;
+            font-size: 12px;
         }
 
         /* Tab标签栏 */
@@ -137,8 +178,10 @@
             </div>
         </div>
 
-
-        <input type="text" id="keyword" placeholder="请输入股票代码">
+        <div style="position: relative; flex: 1;">
+            <input type="text" id="keyword" placeholder="请输入股票代码或名称">
+            <div class="autocomplete-list" id="autocompleteList"></div>
+        </div>
         <button id="searchBtn">查询</button>
     </div>
 
@@ -155,6 +198,7 @@
         const searchBtn = document.getElementById('searchBtn');
         const tabsBox = document.getElementById('tabsBox');
         const iframeBox = document.getElementById('iframeBox');
+        const autocompleteList = document.getElementById('autocompleteList');
         
         // 获取所有单选框
         const typeRadios = document.querySelectorAll('input[name="searchType"]');
@@ -164,6 +208,11 @@
         let activeTabId = null;
         let tabIdCounter = 0;
         
+        // 自动补全相关变量
+        let currentSuggestions = [];
+        let highlightedIndex = -1;
+        let debounceTimer = null;
+
         // 获取当前选中的类型
         function getSelectedType() {
             for (const radio of typeRadios) {
@@ -202,6 +251,9 @@
 
                 // 创建新tab
                 createNewTab(pageTitle, pageUrl);
+                
+                // 清空自动补全列表
+                hideAutocomplete();
             } catch (err) {
                 console.error(err);
                 alert('获取页面地址失败：' + err.message);
@@ -284,9 +336,141 @@
             }
         }
 
+        // 显示自动补全列表
+        function showAutocomplete(suggestions) {
+            currentSuggestions = suggestions;
+            autocompleteList.innerHTML = '';
+            
+            if (suggestions.length === 0) {
+                autocompleteList.style.display = 'none';
+                return;
+            }
+            
+            suggestions.forEach((item, index) => {
+                const itemEl = document.createElement('div');
+                itemEl.className = 'autocomplete-item';
+                itemEl.dataset.index = index;
+                itemEl.innerHTML = `
+                    <div><span class="name">${item.name}</span> <span class="code">${item.code}</span></div>
+                    <div class="type">${item.type}</div>
+                `;
+                
+                itemEl.addEventListener('click', () => {
+                    selectSuggestion(index);
+                });
+                
+                autocompleteList.appendChild(itemEl);
+            });
+            
+            autocompleteList.style.display = 'block';
+            highlightedIndex = -1;
+        }
+
+        // 隐藏自动补全列表
+        function hideAutocomplete() {
+            autocompleteList.style.display = 'none';
+            highlightedIndex = -1;
+        }
+
+        // 选择建议项
+        function selectSuggestion(index) {
+            if (index >= 0 && index < currentSuggestions.length) {
+                const suggestion = currentSuggestions[index];
+                keywordEl.value = suggestion.code; // 填入股票代码
+                hideAutocomplete();
+            }
+        }
+
+        // 高亮指定索引的项目
+        function highlightItem(index) {
+            const items = autocompleteList.querySelectorAll('.autocomplete-item');
+            items.forEach((item, i) => {
+                item.classList.toggle('highlighted', i === index);
+            });
+            highlightedIndex = index;
+        }
+
+        // 键盘导航
+        function handleKeyDown(e) {
+            if (autocompleteList.style.display === 'none' || currentSuggestions.length === 0) {
+                return;
+            }
+
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    const nextIndex = (highlightedIndex + 1) % currentSuggestions.length;
+                    highlightItem(nextIndex);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    const prevIndex = highlightedIndex <= 0 ? currentSuggestions.length - 1 : highlightedIndex - 1;
+                    highlightItem(prevIndex);
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    if (highlightedIndex >= 0) {
+                        selectSuggestion(highlightedIndex);
+                    } else {
+                        searchHandle(); // 如果没有高亮项，则执行搜索
+                    }
+                    break;
+                case 'Escape':
+                    hideAutocomplete();
+                    break;
+            }
+        }
+
+        // 监听输入变化，触发自动补全（防抖处理）
+        keywordEl.addEventListener('input', (e) => {
+            const value = e.target.value.trim();
+            
+            // 清除之前的定时器
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+            }
+            
+            if (value.length > 0) {
+                // 设置新的定时器，延迟300ms发起请求
+                debounceTimer = setTimeout(async () => {
+                    try {
+                        // 调用后端接口获取股票代码建议
+                        const response = await fetch(`/stock/api/v1/get_code?name=${encodeURIComponent(value)}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            showAutocomplete(data.infos || []);
+                        } else {
+                            showAutocomplete([]);
+                        }
+                    } catch (error) {
+                        console.error('获取股票代码建议失败:', error);
+                        showAutocomplete([]);
+                    }
+                }, 300);
+            } else {
+                hideAutocomplete();
+            }
+        });
+
+        // 点击外部区域隐藏自动补全列表
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-bar')) {
+                hideAutocomplete();
+            }
+        });
+
         // 绑定事件
         searchBtn.addEventListener('click', searchHandle);
-        keywordEl.addEventListener('keydown', e => e.key === 'Enter' && searchHandle());
+        keywordEl.addEventListener('keydown', handleKeyDown);
+        keywordEl.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && highlightedIndex < 0) {
+                e.preventDefault(); // 防止在有高亮项时触发搜索
+                searchHandle();
+            }
+        });
     </script>
 </body>
 </html>
+
+
+

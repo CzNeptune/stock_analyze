@@ -6,8 +6,16 @@ from app.core.logger import log
 from app.gen_html.quant_signal import analyze as quant_analyze
 from app.gen_html.stock_evaluator import analyze as expect_analyze
 from app.gen_html.stock_report import analyze as report_analyze
+from app.gen_html.utils import get_stock_list_from_name
 
 router = APIRouter(prefix="/stock/api/v1")
+
+
+@router.get("/get_code")
+async def get_stock_code(name: str):
+    log.info(f"get_stock_code: name: {name}")
+    result = get_stock_list_from_name(name)
+    return {"infos": result}
 
 
 @router.get("/search")
